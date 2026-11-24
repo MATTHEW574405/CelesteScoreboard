@@ -1,0 +1,6 @@
+name: CelesteScoreboard
+version: ${project.version}
+main: fr.celeste.scoreboard.CelesteScoreboard
+api-version: '26.2'
+author: CelesteSMP
+description: Scoreboard anime pour Celeste SMP
