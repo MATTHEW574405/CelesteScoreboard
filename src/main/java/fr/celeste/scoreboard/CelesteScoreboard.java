@@ -227,9 +227,11 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
                 .append(Component.text(p.getPing() + " ms", WHITE).decorate(TextDecoration.BOLD))
                 .append(Component.newline())
                 .append(Component.newline())
-                .append(marquee("\u2726 IP \u00BB ", SERVER_IP, tick / 2, false))
+                               .append(Component.text("\u2726 IP \u00BB ", SKY))
+                .append(Component.text(SERVER_IP, WHITE).decorate(TextDecoration.BOLD))
                 .append(Component.newline())
-                .append(marquee("\u2726 Discord \u00BB ", DISCORD, tick / 2, true))
+                .append(Component.text("\u2726 Discord \u00BB ", SKY))
+                .append(Component.text(DISCORD, WHITE).decorate(TextDecoration.BOLD))
                 .append(Component.newline())
                 .build();
 
