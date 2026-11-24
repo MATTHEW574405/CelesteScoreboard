@@ -227,7 +227,7 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
                 .append(Component.text(p.getPing() + " ms", WHITE).decorate(TextDecoration.BOLD))
                 .append(Component.newline())
                 .append(Component.newline())
-                               .append(Component.text("\u2726 IP \u00BB ", SKY))
+                .append(Component.text("\u2726 IP \u00BB ", SKY))
                 .append(Component.text(SERVER_IP, WHITE).decorate(TextDecoration.BOLD))
                 .append(Component.newline())
                 .append(Component.text("\u2726 Discord \u00BB ", SKY))
@@ -245,23 +245,6 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
         for (int i = 0; i < n; i++) {
             float t = (float) ((Math.sin(i * 0.45 - tick * 0.35) + 1.0) / 2.0);
             b.append(Component.text("\u2501", TextColor.lerp(t, SKY, WHITE)));
-        }
-        return b.build();
-    }
-
-    /** Texte qui defile : label en bleu ciel, valeur en blanc, fenetre de largeur fixe. */
-    private Component marquee(String label, String value, int pos, boolean reverse) {
-        String gap = "   \u2726   ";
-        String full = label + value + gap;
-        int len = full.length();
-        int width = 30;
-        int start = reverse ? (len - (pos % len)) % len : pos % len;
-
-        TextComponent.Builder b = Component.text();
-        for (int i = 0; i < width; i++) {
-            int idx = (start + i) % len;
-            boolean inValue = idx >= label.length() && idx < label.length() + value.length();
-            b.append(Component.text(full.charAt(idx), inValue ? WHITE : SKY));
         }
         return b.build();
     }
