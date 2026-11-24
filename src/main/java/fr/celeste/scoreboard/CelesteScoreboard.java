@@ -1,5 +1,6 @@
 package fr.celeste.scoreboard;
 
+import io.papermc.paper.scoreboard.numbers.NumberFormat;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.TextColor;
@@ -25,8 +26,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class CelesteScoreboard extends JavaPlugin implements Listener {
 
     private static final String TITLE = "\u2726 C\u00C9LESTE SMP \u2726";
+    private static final String SERVER_IP = "celestesmp.boxtoplay.com";
+
     private static final TextColor SKY = TextColor.color(0x87CEEB);
-    private static final TextColor LABEL = TextColor.color(0x9FD3F0);
+    private static final TextColor GRAY = TextColor.color(0x9A9A9A);
     private static final TextColor WHITE = TextColor.color(0xFFFFFF);
     private static final TextColor SHINE_2 = TextColor.color(0xD6F2FF);
     private static final TextColor SHINE_3 = TextColor.color(0xB4E4F8);
@@ -34,26 +37,22 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
 
     private final Map<UUID, Board> boards = new ConcurrentHashMap<>();
     private int tick = 0;
-    private String serverIp;
 
     private static final class Board {
         final Objective objective;
-        final Team pseudo, kills, deaths, time, ip;
+        final Team pseudo, kills, deaths, time;
 
-        Board(Objective objective, Team pseudo, Team kills, Team deaths, Team time, Team ip) {
+        Board(Objective objective, Team pseudo, Team kills, Team deaths, Team time) {
             this.objective = objective;
             this.pseudo = pseudo;
             this.kills = kills;
             this.deaths = deaths;
             this.time = time;
-            this.ip = ip;
         }
     }
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
-        serverIp = getConfig().getString("server-ip", "play.celestesmp.net");
         Bukkit.getPluginManager().registerEvents(this, this);
 
         for (Player p : Bukkit.getOnlinePlayers()) {
@@ -100,19 +99,21 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
         Scoreboard sb = Bukkit.getScoreboardManager().getNewScoreboard();
         Objective obj = sb.registerNewObjective("celeste", Criteria.DUMMY, buildTitle(tick));
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
+        obj.numberFormat(NumberFormat.blank()); // cache les chiffres rouges
 
         addLine(sb, obj, "\u00A70", 11).prefix(Component.empty());
-        addLine(sb, obj, "\u00A71", 10).prefix(header("PROFIL"));
+        addLine(sb, obj, "\u00A71", 10).prefix(header("Profil"));
         Team pseudo = addLine(sb, obj, "\u00A72", 9);
         addLine(sb, obj, "\u00A73", 8).prefix(Component.empty());
-        addLine(sb, obj, "\u00A74", 7).prefix(header("STATISTIQUES"));
+        addLine(sb, obj, "\u00A74", 7).prefix(header("Statistiques"));
         Team kills = addLine(sb, obj, "\u00A75", 6);
         Team deaths = addLine(sb, obj, "\u00A76", 5);
         Team time = addLine(sb, obj, "\u00A77", 4);
         addLine(sb, obj, "\u00A78", 3).prefix(Component.empty());
-        Team ip = addLine(sb, obj, "\u00A79", 2);
+        addLine(sb, obj, "\u00A79", 2).prefix(
+                Component.text("\u2726 " + SERVER_IP, SKY));
 
-        Board board = new Board(obj, pseudo, kills, deaths, time, ip);
+        Board board = new Board(obj, pseudo, kills, deaths, time);
         boards.put(player.getUniqueId(), board);
         updateLines(player, board);
         player.setScoreboard(sb);
@@ -125,17 +126,19 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
         return t;
     }
 
+    /** Fleche bleue + titre de section en blanc gras. */
     private Component header(String text) {
         return Component.text()
                 .append(Component.text("\u00BB ", SKY).decoration(TextDecoration.BOLD, true))
-                .append(Component.text(text, SKY).decoration(TextDecoration.BOLD, true))
+                .append(Component.text(text, WHITE).decoration(TextDecoration.BOLD, true))
                 .build();
     }
 
+    /** Nom en gris, point, valeur en blanc. */
     private Component row(String name, String value) {
         return Component.text()
-                .append(Component.text(name + ": ", LABEL))
-                .append(Component.text(value, WHITE))
+                .append(Component.text(name + " \u00B7 ", GRAY).decoration(TextDecoration.BOLD, false))
+                .append(Component.text(value, WHITE).decoration(TextDecoration.BOLD, false))
                 .build();
     }
 
@@ -144,11 +147,10 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
         int deaths = p.getStatistic(Statistic.DEATHS);
         long seconds = p.getStatistic(Statistic.PLAY_ONE_MINUTE) / 20L;
 
-        b.pseudo.prefix(row("PSEUDO", p.getName()));
-        b.kills.prefix(row("KILLS", String.valueOf(kills)));
-        b.deaths.prefix(row("MORTS", String.valueOf(deaths)));
-        b.time.prefix(row("TEMPS", formatTime(seconds)));
-        b.ip.prefix(Component.text(serverIp, SKY));
+        b.pseudo.prefix(row("Pseudo", p.getName()));
+        b.kills.prefix(row("Kills", String.valueOf(kills)));
+        b.deaths.prefix(row("Morts", String.valueOf(deaths)));
+        b.time.prefix(row("Temps", formatTime(seconds)));
     }
 
     private String formatTime(long total) {
