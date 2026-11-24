@@ -27,6 +27,7 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
 
     private static final String TITLE = "\u2726 C\u00C9LESTE SMP \u2726";
     private static final String SERVER_IP = "celestesmp.boxtoplay.com";
+    private static final String DISCORD = "discord.gg/P7R2bSMwzW";
 
     private static final TextColor SKY = TextColor.color(0x87CEEB);
     private static final TextColor GRAY = TextColor.color(0x9A9A9A);
@@ -57,14 +58,18 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
 
         for (Player p : Bukkit.getOnlinePlayers()) {
             createBoard(p);
+            setupTabName(p);
         }
 
-        // Animation du titre
+        // Animation : titre du scoreboard + TAB (toutes les 2 ticks)
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             tick++;
             Component title = buildTitle(tick);
             for (Board b : boards.values()) {
                 b.objective.displayName(title);
+            }
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                updateTab(p);
             }
         }, 1L, 2L);
 
@@ -81,6 +86,8 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
     public void onDisable() {
         for (Player p : Bukkit.getOnlinePlayers()) {
             p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
+            p.sendPlayerListHeaderAndFooter(Component.empty(), Component.empty());
+            p.playerListName(null);
         }
         boards.clear();
     }
@@ -88,12 +95,16 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         createBoard(e.getPlayer());
+        setupTabName(e.getPlayer());
+        updateTab(e.getPlayer());
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
         boards.remove(e.getPlayer().getUniqueId());
     }
+
+    // ---------------------------------------------------------------- SCOREBOARD
 
     private void createBoard(Player player) {
         Scoreboard sb = Bukkit.getScoreboardManager().getNewScoreboard();
@@ -179,6 +190,76 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
                 default -> SKY;
             };
             b.append(Component.text(TITLE.charAt(i), color).decorate(TextDecoration.BOLD));
+        }
+        return b.build();
+    }
+
+    // ----------------------------------------------------------------------- TAB
+
+    private void setupTabName(Player p) {
+        p.playerListName(Component.text()
+                .append(Component.text("\u2726 ", SKY))
+                .append(Component.text(p.getName(), WHITE))
+                .build());
+    }
+
+    private void updateTab(Player p) {
+        Component header = Component.text()
+                .append(Component.newline())
+                .append(buildTitle(tick))
+                .append(Component.newline())
+                .append(Component.text("Bienvenue, ", GRAY))
+                .append(Component.text(p.getName(), WHITE).decorate(TextDecoration.BOLD))
+                .append(Component.newline())
+                .append(shimmerBar())
+                .build();
+
+        int online = Bukkit.getOnlinePlayers().size();
+        int max = Bukkit.getMaxPlayers();
+
+        Component footer = Component.text()
+                .append(shimmerBar())
+                .append(Component.newline())
+                .append(Component.text("Joueurs ", GRAY))
+                .append(Component.text(online + "/" + max, WHITE).decorate(TextDecoration.BOLD))
+                .append(Component.text("  \u2726  ", SKY))
+                .append(Component.text("Ping ", GRAY))
+                .append(Component.text(p.getPing() + " ms", WHITE).decorate(TextDecoration.BOLD))
+                .append(Component.newline())
+                .append(Component.newline())
+                .append(marquee("\u2726 IP \u00BB ", SERVER_IP, tick / 2, false))
+                .append(Component.newline())
+                .append(marquee("\u2726 Discord \u00BB ", DISCORD, tick / 2, true))
+                .append(Component.newline())
+                .build();
+
+        p.sendPlayerListHeaderAndFooter(header, footer);
+    }
+
+    /** Barre qui ondule entre bleu ciel et blanc. */
+    private Component shimmerBar() {
+        int n = 24;
+        TextComponent.Builder b = Component.text();
+        for (int i = 0; i < n; i++) {
+            float t = (float) ((Math.sin(i * 0.45 - tick * 0.35) + 1.0) / 2.0);
+            b.append(Component.text("\u2501", TextColor.lerp(t, SKY, WHITE)));
+        }
+        return b.build();
+    }
+
+    /** Texte qui defile : label en bleu ciel, valeur en blanc, fenetre de largeur fixe. */
+    private Component marquee(String label, String value, int pos, boolean reverse) {
+        String gap = "   \u2726   ";
+        String full = label + value + gap;
+        int len = full.length();
+        int width = 30;
+        int start = reverse ? (len - (pos % len)) % len : pos % len;
+
+        TextComponent.Builder b = Component.text();
+        for (int i = 0; i < width; i++) {
+            int idx = (start + i) % len;
+            boolean inValue = idx >= label.length() && idx < label.length() + value.length();
+            b.append(Component.text(full.charAt(idx), inValue ? WHITE : SKY));
         }
         return b.build();
     }
