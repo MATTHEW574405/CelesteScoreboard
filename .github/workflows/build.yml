@@ -17,4 +17,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest target/CelesteScoreboard-1.0.0.jar --title "CelesteScoreboard" --notes "Dernier build" --target ${{ github.sha }} 
+          gh release create latest target/CelesteScoreboard-1.0.0.jar --title "CelesteScoreboard" --notes "Dernier build" --target ${{ github.sha }}
