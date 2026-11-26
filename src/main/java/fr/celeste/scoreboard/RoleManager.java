@@ -535,7 +535,12 @@ public final class RoleManager implements Listener {
     }
 
     // ================================================================ AFFICHAGE
-
+    /** Role affiche dans le scoreboard (symbole + nom, couleur du role). */
+    public Component rankDisplay(Player p) {
+        Role r = top(p.getUniqueId());
+        String text = (r.symbol().isEmpty() ? "" : r.symbol() + " ") + r.name();
+        return Component.text(text, r.color());
+    }
     private Component chatPrefix(Role r) {
         String text = (r.symbol().isEmpty() ? "" : r.symbol() + " ") + r.name().toUpperCase(Locale.ROOT);
         Component c = Component.text(text, r.color());
