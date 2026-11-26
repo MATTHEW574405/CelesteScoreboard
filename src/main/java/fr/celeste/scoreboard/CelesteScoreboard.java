@@ -38,14 +38,16 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
 
     private final Map<UUID, Board> boards = new ConcurrentHashMap<>();
     private int tick = 0;
+    private RoleManager roleManager;
 
     private static final class Board {
         final Objective objective;
-        final Team pseudo, kills, deaths, time;
+        final Team pseudo, rang, kills, deaths, time;
 
-        Board(Objective objective, Team pseudo, Team kills, Team deaths, Team time) {
+        Board(Objective objective, Team pseudo, Team rang, Team kills, Team deaths, Team time) {
             this.objective = objective;
             this.pseudo = pseudo;
+            this.rang = rang;
             this.kills = kills;
             this.deaths = deaths;
             this.time = time;
@@ -56,11 +58,15 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
     public void onEnable() {
         Bukkit.getPluginManager().registerEvents(this, this);
         Bukkit.getPluginManager().registerEvents(new ModBlocker(this), this);
-        new RoleManager(this).enable();
+
         for (Player p : Bukkit.getOnlinePlayers()) {
             createBoard(p);
             setupTabName(p);
         }
+
+        // Les roles s'appliquent en dernier (ils remplacent les noms du TAB)
+        roleManager = new RoleManager(this);
+        roleManager.enable();
 
         // Animation : titre du scoreboard + TAB (toutes les 2 ticks)
         Bukkit.getScheduler().runTaskTimer(this, () -> {
@@ -74,7 +80,7 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
             }
         }, 1L, 2L);
 
-        // Stats : chaque seconde
+        // Stats et rang : chaque seconde
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 Board b = boards.get(p.getUniqueId());
@@ -113,9 +119,10 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
         obj.numberFormat(NumberFormat.blank()); // cache les chiffres rouges
 
-        addLine(sb, obj, "\u00A70", 11).prefix(Component.empty());
-        addLine(sb, obj, "\u00A71", 10).prefix(header("Profil"));
-        Team pseudo = addLine(sb, obj, "\u00A72", 9);
+        addLine(sb, obj, "\u00A70", 12).prefix(Component.empty());
+        addLine(sb, obj, "\u00A71", 11).prefix(header("Profil"));
+        Team pseudo = addLine(sb, obj, "\u00A72", 10);
+        Team rang = addLine(sb, obj, "\u00A7a", 9);
         addLine(sb, obj, "\u00A73", 8).prefix(Component.empty());
         addLine(sb, obj, "\u00A74", 7).prefix(header("Statistiques"));
         Team kills = addLine(sb, obj, "\u00A75", 6);
@@ -125,7 +132,7 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
         addLine(sb, obj, "\u00A79", 2).prefix(
                 Component.text("\u2726 " + SERVER_IP, SKY));
 
-        Board board = new Board(obj, pseudo, kills, deaths, time);
+        Board board = new Board(obj, pseudo, rang, kills, deaths, time);
         boards.put(player.getUniqueId(), board);
         updateLines(player, board);
         player.setScoreboard(sb);
@@ -154,12 +161,24 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
                 .build();
     }
 
+    /** Ligne Rang : le role du joueur dans sa couleur. */
+    private Component rankRow(Player p) {
+        Component value = roleManager != null
+                ? roleManager.rankDisplay(p)
+                : Component.text("Joueur", WHITE);
+        return Component.text()
+                .append(Component.text("Rang \u00B7 ", GRAY).decoration(TextDecoration.BOLD, false))
+                .append(value.decoration(TextDecoration.BOLD, false))
+                .build();
+    }
+
     private void updateLines(Player p, Board b) {
         int kills = p.getStatistic(Statistic.PLAYER_KILLS);
         int deaths = p.getStatistic(Statistic.DEATHS);
         long seconds = p.getStatistic(Statistic.PLAY_ONE_MINUTE) / 20L;
 
         b.pseudo.prefix(row("Pseudo", p.getName()));
+        b.rang.prefix(rankRow(p));
         b.kills.prefix(row("Kills", String.valueOf(kills)));
         b.deaths.prefix(row("Morts", String.valueOf(deaths)));
         b.time.prefix(row("Temps", formatTime(seconds)));
