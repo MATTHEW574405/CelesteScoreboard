@@ -46,19 +46,21 @@ public final class RoleManager implements Listener {
     private static final TextColor SKY = TextColor.color(0x87CEEB);
     private static final String DEFAULT_ROLE = "joueur";
 
-    private record Role(String id, String name, String symbol, TextColor color,
+    private record Role(String id, String name, String symbol, TextColor color, TextColor color2,
                         int weight, boolean op, String parent, List<String> permissions) {}
 
     private static final String DEFAULT_ROLES_YML = """
             # Roles de Celeste SMP : modifie ce fichier librement, puis tape /rolesreload en jeu.
+            # couleur / couleur2 : debut et fin du degrade (codes hexadecimaux).
             # poids   : plus il est grand, plus le role est haut (un poids different par role).
             # herite  : le role recoit aussi les permissions du role indique.
             # op      : true = le joueur est operateur (op) tant qu'il a ce role.
             roles:
               owner:
                 nom: "Owner"
-                symbole: "\\u2726"
-                couleur: "#FFD166"
+                symbole: "\\u2605"
+                couleur: "#FF0080"
+                couleur2: "#FFB300"
                 poids: 100
                 op: true
                 herite: "admin"
@@ -66,7 +68,8 @@ public final class RoleManager implements Listener {
               admin:
                 nom: "Admin"
                 symbole: "\\u2726"
-                couleur: "#FF6B6B"
+                couleur: "#FF3B30"
+                couleur2: "#FF9500"
                 poids: 90
                 herite: "modo"
                 permissions:
@@ -87,7 +90,8 @@ public final class RoleManager implements Listener {
               modo:
                 nom: "Mod\\u00E9rateur"
                 symbole: "\\u2727"
-                couleur: "#4DA3FF"
+                couleur: "#00C6FF"
+                couleur2: "#0072FF"
                 poids: 70
                 herite: "helper"
                 permissions:
@@ -101,8 +105,9 @@ public final class RoleManager implements Listener {
                   - "minecraft.command.gamemode"
               helper:
                 nom: "Helper"
-                symbole: "\\u2727"
-                couleur: "#7FDBFF"
+                symbole: "\\u2666"
+                couleur: "#00F5A0"
+                couleur2: "#00D9F5"
                 poids: 50
                 herite: "vipplus"
                 permissions:
@@ -111,15 +116,17 @@ public final class RoleManager implements Listener {
               vipplus:
                 nom: "VIP+"
                 symbole: "\\u2756"
-                couleur: "#C792EA"
+                couleur: "#B721FF"
+                couleur2: "#21D4FD"
                 poids: 30
                 herite: "vip"
                 permissions:
                   - "celeste.vipplus"
               vip:
                 nom: "VIP"
-                symbole: "\\u2756"
-                couleur: "#5EEAD4"
+                symbole: "\\u2606"
+                couleur: "#FFD200"
+                couleur2: "#F7971E"
                 poids: 20
                 herite: "joueur"
                 permissions:
@@ -127,7 +134,8 @@ public final class RoleManager implements Listener {
               joueur:
                 nom: "Joueur"
                 symbole: ""
-                couleur: "#E6E6E6"
+                couleur: "#87CEEB"
+                couleur2: "#FFFFFF"
                 poids: 0
                 permissions:
                   - "celeste.joueur"
@@ -262,15 +270,16 @@ public final class RoleManager implements Listener {
         Player online = target.getPlayer();
         if (online != null) {
             apply(online);
+            Component roleName = gradient(role.name(), role.color(), role.color2(), true);
             if (add) {
                 online.sendMessage(Component.text()
                         .append(Component.text("\u2726 Tu as re\u00E7u le r\u00F4le ", SKY))
-                        .append(Component.text(role.name(), role.color()).decorate(TextDecoration.BOLD))
+                        .append(roleName)
                         .build());
             } else {
                 online.sendMessage(Component.text()
                         .append(Component.text("\u2726 Le r\u00F4le ", SKY))
-                        .append(Component.text(role.name(), role.color()).decorate(TextDecoration.BOLD))
+                        .append(roleName)
                         .append(Component.text(" t'a \u00E9t\u00E9 retir\u00E9.", SKY))
                         .build());
             }
@@ -295,7 +304,7 @@ public final class RoleManager implements Listener {
             List<Role> list = rolesOf(t.getUniqueId());
             for (int i = 0; i < list.size(); i++) {
                 if (i > 0) line.append(Component.text(", ", NamedTextColor.GRAY));
-                line.append(Component.text(list.get(i).name(), list.get(i).color()));
+                line.append(gradient(list.get(i).name(), list.get(i).color(), list.get(i).color2(), true));
             }
             s.sendMessage(line.build());
             return;
@@ -408,13 +417,15 @@ public final class RoleManager implements Listener {
                 String id = key.toLowerCase(Locale.ROOT);
                 TextColor color = TextColor.fromHexString(r.getString("couleur", "#FFFFFF"));
                 if (color == null) color = NamedTextColor.WHITE;
+                TextColor color2 = TextColor.fromHexString(r.getString("couleur2", ""));
+                if (color2 == null) color2 = color;
                 map.put(id, new Role(id, r.getString("nom", key), r.getString("symbole", ""),
-                        color, r.getInt("poids", 0), r.getBoolean("op", false),
+                        color, color2, r.getInt("poids", 0), r.getBoolean("op", false),
                         r.getString("herite", ""), r.getStringList("permissions")));
             }
         }
         if (!map.containsKey(DEFAULT_ROLE)) {
-            map.put(DEFAULT_ROLE, new Role(DEFAULT_ROLE, "Joueur", "", TextColor.color(0xE6E6E6),
+            map.put(DEFAULT_ROLE, new Role(DEFAULT_ROLE, "Joueur", "", SKY, NamedTextColor.WHITE,
                     0, false, "", List.of("celeste.joueur")));
         }
         roles = map;
@@ -535,16 +546,29 @@ public final class RoleManager implements Listener {
     }
 
     // ================================================================ AFFICHAGE
-    /** Role affiche dans le scoreboard (symbole + nom, couleur du role). */
+
+    /** Texte en degrade, lettre par lettre. */
+    private Component gradient(String text, TextColor from, TextColor to, boolean bold) {
+        TextComponent.Builder b = Component.text();
+        int n = text.length();
+        for (int i = 0; i < n; i++) {
+            float t = n <= 1 ? 0f : (float) i / (n - 1);
+            Component c = Component.text(text.charAt(i), TextColor.lerp(t, from, to));
+            b.append(bold ? c.decorate(TextDecoration.BOLD) : c);
+        }
+        return b.build();
+    }
+
+    /** Role affiche dans le scoreboard (symbole + nom en degrade, gras). */
     public Component rankDisplay(Player p) {
         Role r = top(p.getUniqueId());
         String text = (r.symbol().isEmpty() ? "" : r.symbol() + " ") + r.name();
-        return Component.text(text, r.color());
+        return gradient(text, r.color(), r.color2(), true);
     }
+
     private Component chatPrefix(Role r) {
         String text = (r.symbol().isEmpty() ? "" : r.symbol() + " ") + r.name().toUpperCase(Locale.ROOT);
-        Component c = Component.text(text, r.color());
-        return r.weight() > 0 ? c.decorate(TextDecoration.BOLD) : c;
+        return gradient(text, r.color(), r.color2(), true);
     }
 
     private Component tabName(Player p) {
@@ -559,75 +583,3 @@ public final class RoleManager implements Listener {
     private Component nameplatePrefix(Role r) {
         return r.symbol().isEmpty() ? Component.empty() : Component.text(r.symbol() + " ", r.color());
     }
-
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onChat(AsyncChatEvent e) {
-        e.renderer(ChatRenderer.viewerUnaware((source, name, message) -> {
-            Role r = top(source.getUniqueId());
-            return Component.text()
-                    .append(chatPrefix(r))
-                    .append(Component.text(" \u2502 ", NamedTextColor.DARK_GRAY))
-                    .append(Component.text(source.getName(), r.color()))
-                    .append(Component.text(" \u00BB ", NamedTextColor.GRAY))
-                    .append(message.colorIfAbsent(NamedTextColor.WHITE))
-                    .build();
-        }));
-    }
-
-    @EventHandler
-    public void onJoin(PlayerJoinEvent e) {
-        Player p = e.getPlayer();
-        apply(p);
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (p.isOnline()) apply(p);
-        }, 10L);
-    }
-
-    @EventHandler
-    public void onQuit(PlayerQuitEvent e) {
-        Player quitting = e.getPlayer();
-        attachments.remove(quitting.getUniqueId());
-        String name = quitting.getName();
-        for (Player viewer : Bukkit.getOnlinePlayers()) {
-            if (viewer.equals(quitting)) continue;
-            for (Team t : new ArrayList<>(viewer.getScoreboard().getTeams())) {
-                if (isRoleTeam(t) && t.hasEntry(name)) t.removeEntry(name);
-            }
-        }
-    }
-
-    // ===================================== NOMS AU-DESSUS DES TETES + TRI DU TAB
-
-    private boolean isRoleTeam(Team t) {
-        return t.getName().matches("r\\d{3}.*");
-    }
-
-    /** Nom de team : plus le role est haut, plus le nom est petit, donc en haut du TAB. */
-    private String teamName(Role r) {
-        String id = r.id().length() > 8 ? r.id().substring(0, 8) : r.id();
-        return String.format("r%03d%s", Math.max(0, 999 - r.weight()), id);
-    }
-
-    private void refreshTeams() {
-        List<Player> online = new ArrayList<>(Bukkit.getOnlinePlayers());
-        for (Player viewer : online) {
-            Scoreboard sb = viewer.getScoreboard();
-            for (Player target : online) {
-                Role r = top(target.getUniqueId());
-                String wanted = teamName(r);
-                Team team = sb.getTeam(wanted);
-                if (team == null) team = sb.registerNewTeam(wanted);
-                team.prefix(nameplatePrefix(r));
-                team.color(NamedTextColor.nearestTo(r.color()));
-
-                String entry = target.getName();
-                for (Team other : new ArrayList<>(sb.getTeams())) {
-                    if (isRoleTeam(other) && !other.getName().equals(wanted) && other.hasEntry(entry)) {
-                        other.removeEntry(entry);
-                    }
-                }
-                if (!team.hasEntry(entry)) team.addEntry(entry);
-            }
-        }
-    }
-}
