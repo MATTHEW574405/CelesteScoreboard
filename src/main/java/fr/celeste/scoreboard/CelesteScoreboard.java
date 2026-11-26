@@ -91,7 +91,8 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-            if (roleManager != null) roleManager.disable();    for (Player p : Bukkit.getOnlinePlayers()) {
+        if (roleManager != null) roleManager.disable();
+        for (Player p : Bukkit.getOnlinePlayers()) {
             p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
             p.sendPlayerListHeaderAndFooter(Component.empty(), Component.empty());
             p.playerListName(null);
@@ -161,14 +162,14 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
                 .build();
     }
 
-    /** Ligne Rang : le role du joueur dans sa couleur. */
+    /** Ligne Rang : le role du joueur dans son degrade. */
     private Component rankRow(Player p) {
         Component value = roleManager != null
                 ? roleManager.rankDisplay(p)
                 : Component.text("Joueur", WHITE);
         return Component.text()
                 .append(Component.text("Rang \u00B7 ", GRAY).decoration(TextDecoration.BOLD, false))
-                .append(value.decoration(TextDecoration.BOLD, false))
+                .append(value)
                 .build();
     }
 
