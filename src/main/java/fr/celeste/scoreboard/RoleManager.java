@@ -583,3 +583,75 @@ public final class RoleManager implements Listener {
     private Component nameplatePrefix(Role r) {
         return r.symbol().isEmpty() ? Component.empty() : Component.text(r.symbol() + " ", r.color());
     }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onChat(AsyncChatEvent e) {
+        e.renderer(ChatRenderer.viewerUnaware((source, name, message) -> {
+            Role r = top(source.getUniqueId());
+            return Component.text()
+                    .append(chatPrefix(r))
+                    .append(Component.text(" \u2502 ", NamedTextColor.DARK_GRAY))
+                    .append(gradient(source.getName(), r.color(), r.color2(), false))
+                    .append(Component.text(" \u00BB ", NamedTextColor.GRAY))
+                    .append(message.colorIfAbsent(NamedTextColor.WHITE))
+                    .build();
+        }));
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent e) {
+        Player p = e.getPlayer();
+        apply(p);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (p.isOnline()) apply(p);
+        }, 10L);
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent e) {
+        Player quitting = e.getPlayer();
+        attachments.remove(quitting.getUniqueId());
+        String name = quitting.getName();
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            if (viewer.equals(quitting)) continue;
+            for (Team t : new ArrayList<>(viewer.getScoreboard().getTeams())) {
+                if (isRoleTeam(t) && t.hasEntry(name)) t.removeEntry(name);
+            }
+        }
+    }
+
+    // ===================================== NOMS AU-DESSUS DES TETES + TRI DU TAB
+
+    private boolean isRoleTeam(Team t) {
+        return t.getName().matches("r\\d{3}.*");
+    }
+
+    /** Nom de team : plus le role est haut, plus le nom est petit, donc en haut du TAB. */
+    private String teamName(Role r) {
+        String id = r.id().length() > 8 ? r.id().substring(0, 8) : r.id();
+        return String.format("r%03d%s", Math.max(0, 999 - r.weight()), id);
+    }
+
+    private void refreshTeams() {
+        List<Player> online = new ArrayList<>(Bukkit.getOnlinePlayers());
+        for (Player viewer : online) {
+            Scoreboard sb = viewer.getScoreboard();
+            for (Player target : online) {
+                Role r = top(target.getUniqueId());
+                String wanted = teamName(r);
+                Team team = sb.getTeam(wanted);
+                if (team == null) team = sb.registerNewTeam(wanted);
+                team.prefix(nameplatePrefix(r));
+                team.color(NamedTextColor.nearestTo(r.color()));
+
+                String entry = target.getName();
+                for (Team other : new ArrayList<>(sb.getTeams())) {
+                    if (isRoleTeam(other) && !other.getName().equals(wanted) && other.hasEntry(entry)) {
+                        other.removeEntry(entry);
+                    }
+                }
+                if (!team.hasEntry(entry)) team.addEntry(entry);
+            }
+        }
+    }
+}
