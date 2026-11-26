@@ -56,7 +56,7 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
     public void onEnable() {
         Bukkit.getPluginManager().registerEvents(this, this);
         Bukkit.getPluginManager().registerEvents(new ModBlocker(this), this);
-
+        new RoleManager(this).enable();
         for (Player p : Bukkit.getOnlinePlayers()) {
             createBoard(p);
             setupTabName(p);
