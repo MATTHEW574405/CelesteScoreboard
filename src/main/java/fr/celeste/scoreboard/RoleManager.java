@@ -150,7 +150,20 @@ public final class RoleManager implements Listener {
     public RoleManager(JavaPlugin plugin) {
         this.plugin = plugin;
     }
-
+    /** Appele a l'arret : retire nos commandes et nos permissions. */
+    public void disable() {
+        Bukkit.getCommandMap().getKnownCommands().values().removeIf(c -> c instanceof Cmd);
+        for (Map.Entry<UUID, PermissionAttachment> e : attachments.entrySet()) {
+            Player p = Bukkit.getPlayer(e.getKey());
+            if (p != null) {
+                try {
+                    p.removeAttachment(e.getValue());
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+        }
+        attachments.clear();
+    }
     public void enable() {
         plugin.getDataFolder().mkdirs();
         loadRoles();
