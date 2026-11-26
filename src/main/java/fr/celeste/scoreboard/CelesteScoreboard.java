@@ -91,7 +91,7 @@ public final class CelesteScoreboard extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (roleManager != null) roleManager.disable();    for (Player p : Bukkit.getOnlinePlayers()) {
             p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
             p.sendPlayerListHeaderAndFooter(Component.empty(), Component.empty());
             p.playerListName(null);
