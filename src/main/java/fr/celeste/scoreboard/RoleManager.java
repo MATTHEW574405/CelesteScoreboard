@@ -8,7 +8,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
@@ -19,9 +18,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
-import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.permissions.Permission;
@@ -59,136 +55,22 @@ public final class RoleManager implements Listener {
     private record Role(String id, String name, String symbol, TextColor color, TextColor color2,
                         int weight, boolean op, String parent, List<String> permissions) {}
 
-    private static final String DEFAULT_ROLES_YML = """
-            # Roles de Celeste SMP : modifie ce fichier librement, puis tape /rolesreload en jeu.
-            # couleur / couleur2 : debut et fin du degrade (codes hexadecimaux).
-            # poids   : plus il est grand, plus le role est haut (un poids different par role).
-            # herite  : le role recoit aussi les permissions du role indique.
-            # op      : true = le joueur est operateur (op) tant qu'il a ce role.
-            # permissions : une permission par ligne. Deux raccourcis :
-            #   "plugin:NomDuPlugin" = toutes les permissions declarees par ce plugin
-            #   "*"                  = toutes les permissions de tous les plugins
-            roles:
-              owner:
-                nom: "Owner"
-                symbole: "\\u2605"
-                couleur: "#FF0080"
-                couleur2: "#FFB300"
-                poids: 100
-                op: true
-                herite: "admin"
-                permissions:
-                  - "*"
-              admin:
-                nom: "Admin"
-                symbole: "\\u2726"
-                couleur: "#FF3B30"
-                couleur2: "#FF9500"
-                poids: 90
-                herite: "modo"
-                permissions:
-                  - "celeste.modprobe"
-                  - "lightbans.ban"
-                  - "lightbans.ipban"
-                  - "lightbans.muteip"
-                  - "lightbans.unban"
-                  - "lightbans.unmuteip"
-                  - "lightbans.softban"
-                  - "lightbans.blacklist"
-                  - "lightbans.banhistory"
-                  - "lightbans.mutehistory"
-                  - "lightbans.userhistory"
-                  - "minecraft.command.ban"
-                  - "minecraft.command.ban-ip"
-                  - "minecraft.command.pardon"
-                  - "minecraft.command.pardon-ip"
-                  - "minecraft.command.banlist"
-                  - "coreprotect.rollback"
-                  - "coreprotect.restore"
-                  - "plugin:InvSeePlusPlus"
-                  - "plugin:InventoryRollbackPlus"
-                  - "voicechat.admin"
-              modo:
-                nom: "Mod\\u00E9rateur"
-                symbole: "\\u2727"
-                couleur: "#00C6FF"
-                couleur2: "#0072FF"
-                poids: 70
-                herite: "helper"
-                permissions:
-                  - "celeste.modbypass"
-                  - "lightbans.mod"
-                  - "lightbans.tempban"
-                  - "lightbans.mute"
-                  - "lightbans.unmute"
-                  - "lightbans.kick"
-                  - "lightbans.unwarn"
-                  - "lightbans.alts"
-                  - "minecraft.command.kick"
-                  - "minecraft.command.gamemode"
-                  - "coreprotect.inspect"
-                  - "coreprotect.lookup"
-                  - "coreprotect.help"
-              helper:
-                nom: "Helper"
-                symbole: "\\u2666"
-                couleur: "#00F5A0"
-                couleur2: "#00D9F5"
-                poids: 50
-                herite: "vipplus"
-                permissions:
-                  - "lightbans.warn"
-                  - "lightbans.tempmute"
-                  - "lightbans.history"
-                  - "lightbans.check"
-                  - "minecraft.command.teleport"
-                  - "minecraft.command.tp"
-              vipplus:
-                nom: "VIP+"
-                symbole: "\\u2756"
-                couleur: "#B721FF"
-                couleur2: "#21D4FD"
-                poids: 30
-                herite: "vip"
-                permissions:
-                  - "celeste.vipplus"
-              vip:
-                nom: "VIP"
-                symbole: "\\u2606"
-                couleur: "#FFD200"
-                couleur2: "#F7971E"
-                poids: 20
-                herite: "joueur"
-                permissions:
-                  - "celeste.vip"
-              joueur:
-                nom: "Joueur"
-                symbole: ""
-                couleur: "#87CEEB"
-                couleur2: "#FFFFFF"
-                poids: 0
-                permissions:
-                  - "celeste.joueur"
-            """;
-
     private final JavaPlugin plugin;
+    private final VanishManager vanish;
     private volatile Map<String, Role> roles = new LinkedHashMap<>();
     private final Map<UUID, Set<String>> assigned = new ConcurrentHashMap<>();
     private final Set<UUID> opGranted = ConcurrentHashMap.newKeySet();
     private final Map<UUID, PermissionAttachment> attachments = new ConcurrentHashMap<>();
-    private final Set<UUID> vanished = ConcurrentHashMap.newKeySet();
 
     public RoleManager(JavaPlugin plugin) {
         this.plugin = plugin;
+        this.vanish = new VanishManager(plugin);
     }
 
     /** Appele a l'arret : retire nos commandes, nos permissions et le vanish. */
     public void disable() {
         Bukkit.getCommandMap().getKnownCommands().values().removeIf(c -> c instanceof Cmd);
-        for (UUID id : new ArrayList<>(vanished)) {
-            Player p = Bukkit.getPlayer(id);
-            if (p != null) unvanish(p, false);
-        }
+        vanish.disable();
         for (Map.Entry<UUID, PermissionAttachment> e : attachments.entrySet()) {
             Player p = Bukkit.getPlayer(e.getKey());
             if (p != null) {
@@ -207,16 +89,21 @@ public final class RoleManager implements Listener {
         loadPlayers();
 
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        vanish.enable();
 
         CommandMap map = Bukkit.getCommandMap();
         map.register("celeste", new Cmd("mettre", "set", "Definir le role d'un joueur", "celeste.roles.manage"));
         map.register("celeste", new Cmd("roles", "roles", "Voir les roles", null));
         map.register("celeste", new Cmd("rolesreload", "reload", "Recharger roles.yml", null));
         map.register("celeste", new Cmd("rolesperms", "perms", "Voir les permissions d'un plugin", null));
-        map.register("celeste", new Cmd("vanish", "vanish", "Devenir invisible", "celeste.vanish"));
 
         Bukkit.getScheduler().runTaskTimer(plugin, this::refreshTeams, 40L, 100L);
         for (Player p : Bukkit.getOnlinePlayers()) apply(p);
+    }
+
+    /** Nombre de joueurs visibles par ce joueur (le vanish est masque aux autres). */
+    public int visibleOnline(Player viewer) {
+        return vanish.visibleOnline(viewer);
     }
 
     // ================================================================ COMMANDES
@@ -280,17 +167,6 @@ public final class RoleManager implements Listener {
                     shown++;
                 }
             }
-            case "vanish" -> {
-                if (!(s instanceof Player p)) {
-                    s.sendMessage(err("Commande r\u00E9serv\u00E9e aux joueurs."));
-                    return true;
-                }
-                if (!canVanish(p)) {
-                    s.sendMessage(err("Tu n'as pas la permission."));
-                    return true;
-                }
-                toggleVanish(p);
-            }
             default -> setRole(s, label, args);
         }
         return true;
@@ -315,7 +191,7 @@ public final class RoleManager implements Listener {
             pseudo = args[1];
         }
         if (role == null) {
-            s.sendMessage(err("R\u00F4le inconnu. R\u00F4les : " + roleList()));
+            s.sendMessage(err("R\u00F4le inconnu. R\u00F4les : " + String.join(", ", roles.keySet())));
             return;
         }
 
@@ -424,10 +300,6 @@ public final class RoleManager implements Listener {
         }
     }
 
-    private String roleList() {
-        return String.join(", ", roles.keySet());
-    }
-
     private OfflinePlayer findPlayer(String name) {
         Player online = Bukkit.getPlayerExact(name);
         if (online != null) return online;
@@ -451,10 +323,6 @@ public final class RoleManager implements Listener {
                 || top(p.getUniqueId()).weight() >= minWeight(MANAGE_MIN_ROLE);
     }
 
-    private boolean canVanish(Player p) {
-        return p.isOp() || p.hasPermission("celeste.vanish");
-    }
-
     private Component ok(String msg) {
         return Component.text()
                 .append(Component.text("\u2726 ", SKY))
@@ -472,7 +340,7 @@ public final class RoleManager implements Listener {
         File file = new File(plugin.getDataFolder(), "roles.yml");
         if (!file.exists()) {
             try {
-                Files.writeString(file.toPath(), DEFAULT_ROLES_YML, StandardCharsets.UTF_8);
+                Files.writeString(file.toPath(), RoleDefaults.YML, StandardCharsets.UTF_8);
             } catch (IOException ex) {
                 plugin.getLogger().warning("Impossible de creer roles.yml : " + ex.getMessage());
             }
@@ -585,4 +453,174 @@ public final class RoleManager implements Listener {
             if (target != null) {
                 try {
                     for (Permission perm : target.getDescription().getPermissions()) out.add(perm.getName());
-                } catch (Exception ignored)
+                } catch (Exception ignored) {
+                    // plugin sans plugin.yml classique : rien a lire
+                }
+            }
+        } else if (!t.isEmpty()) {
+            out.add(t);
+        }
+        return out;
+    }
+
+    // ============================================================ APPLICATION
+
+    private void apply(Player p) {
+        UUID id = p.getUniqueId();
+        PermissionAttachment old = attachments.remove(id);
+        if (old != null) {
+            try {
+                p.removeAttachment(old);
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        PermissionAttachment att = p.addAttachment(plugin);
+        for (Role r : rolesOf(id)) {
+            for (String token : allPerms(r)) {
+                for (String node : expand(token)) att.setPermission(node, true);
+            }
+        }
+        int w = top(id).weight();
+        if (w >= minWeight(MANAGE_MIN_ROLE)) att.setPermission("celeste.roles.manage", true);
+        if (w >= minWeight(VANISH_MIN_ROLE)) att.setPermission("celeste.vanish", true);
+        attachments.put(id, att);
+
+        reconcileOp(p);
+        p.recalculatePermissions();
+        p.updateCommands();
+        p.playerListName(tabName(p));
+        vanish.refresh(p);
+        refreshTeams();
+    }
+
+    /** Un role "op" rend operateur ; on ne retire l'op que si c'est nous qui l'avons donne. */
+    private void reconcileOp(OfflinePlayer o) {
+        UUID id = o.getUniqueId();
+        boolean wantOp = false;
+        for (Role r : rolesOf(id)) {
+            if (r.op()) wantOp = true;
+        }
+        if (wantOp && !o.isOp()) {
+            o.setOp(true);
+            opGranted.add(id);
+            save();
+        } else if (!wantOp && opGranted.remove(id)) {
+            o.setOp(false);
+            save();
+        }
+    }
+
+    // ================================================================ AFFICHAGE
+
+    /** Texte en degrade, lettre par lettre. */
+    private Component gradient(String text, TextColor from, TextColor to, boolean bold) {
+        TextComponent.Builder b = Component.text();
+        int n = text.length();
+        for (int i = 0; i < n; i++) {
+            float t = n <= 1 ? 0f : (float) i / (n - 1);
+            Component c = Component.text(text.charAt(i), TextColor.lerp(t, from, to));
+            b.append(bold ? c.decorate(TextDecoration.BOLD) : c);
+        }
+        return b.build();
+    }
+
+    /** Role affiche dans le scoreboard (symbole + nom en degrade, gras). */
+    public Component rankDisplay(Player p) {
+        Role r = top(p.getUniqueId());
+        String text = (r.symbol().isEmpty() ? "" : r.symbol() + " ") + r.name();
+        return gradient(text, r.color(), r.color2(), true);
+    }
+
+    private Component chatPrefix(Role r) {
+        String text = (r.symbol().isEmpty() ? "" : r.symbol() + " ") + r.name().toUpperCase(Locale.ROOT);
+        return gradient(text, r.color(), r.color2(), true);
+    }
+
+    private Component tabName(Player p) {
+        Role r = top(p.getUniqueId());
+        return Component.text()
+                .append(chatPrefix(r))
+                .append(Component.text(" \u2502 ", NamedTextColor.DARK_GRAY))
+                .append(Component.text(p.getName(), NamedTextColor.WHITE))
+                .build();
+    }
+
+    /** Au-dessus de la tete : meme affichage que le TAB (role | pseudo). */
+    private Component nameplatePrefix(Role r) {
+        return Component.text()
+                .append(chatPrefix(r))
+                .append(Component.text(" \u2502 ", NamedTextColor.DARK_GRAY))
+                .build();
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onChat(AsyncChatEvent e) {
+        e.renderer(ChatRenderer.viewerUnaware((source, name, message) -> {
+            Role r = top(source.getUniqueId());
+            return Component.text()
+                    .append(chatPrefix(r))
+                    .append(Component.text(" \u2502 ", NamedTextColor.DARK_GRAY))
+                    .append(gradient(source.getName(), r.color(), r.color2(), false))
+                    .append(Component.text(" \u00BB ", NamedTextColor.GRAY))
+                    .append(message.colorIfAbsent(NamedTextColor.WHITE))
+                    .build();
+        }));
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent e) {
+        Player p = e.getPlayer();
+        apply(p);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (p.isOnline()) apply(p);
+        }, 10L);
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent e) {
+        Player quitting = e.getPlayer();
+        attachments.remove(quitting.getUniqueId());
+        String name = quitting.getName();
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            if (viewer.equals(quitting)) continue;
+            for (Team t : new ArrayList<>(viewer.getScoreboard().getTeams())) {
+                if (isRoleTeam(t) && t.hasEntry(name)) t.removeEntry(name);
+            }
+        }
+    }
+
+    // ===================================== NOMS AU-DESSUS DES TETES + TRI DU TAB
+
+    private boolean isRoleTeam(Team t) {
+        return t.getName().matches("r\\d{3}.*");
+    }
+
+    /** Nom de team : plus le role est haut, plus le nom est petit, donc en haut du TAB. */
+    private String teamName(Role r) {
+        String id = r.id().length() > 8 ? r.id().substring(0, 8) : r.id();
+        return String.format("r%03d%s", Math.max(0, 999 - r.weight()), id);
+    }
+
+    private void refreshTeams() {
+        List<Player> online = new ArrayList<>(Bukkit.getOnlinePlayers());
+        for (Player viewer : online) {
+            Scoreboard sb = viewer.getScoreboard();
+            for (Player target : online) {
+                Role r = top(target.getUniqueId());
+                String wanted = teamName(r);
+                Team team = sb.getTeam(wanted);
+                if (team == null) team = sb.registerNewTeam(wanted);
+                team.prefix(nameplatePrefix(r));
+                team.color(NamedTextColor.WHITE);
+
+                String entry = target.getName();
+                for (Team other : new ArrayList<>(sb.getTeams())) {
+                    if (isRoleTeam(other) && !other.getName().equals(wanted) && other.hasEntry(entry)) {
+                        other.removeEntry(entry);
+                    }
+                }
+                if (!team.hasEntry(entry)) team.addEntry(entry);
+            }
+        }
+    }
+}
